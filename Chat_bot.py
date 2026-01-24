@@ -6,6 +6,9 @@
 from flask import Flask, render_template, request, jsonify
 import os
 import json
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 app = Flask(__name__)
 
@@ -75,6 +78,73 @@ SCENES_DATA = {
 }
 
 # ========================
+# 質問類似度マッチングシステム
+# ========================
+class QuestionMatcher:
+    """質問の類似度を計算して最適な回答を見つけるクラス"""
+    def __init__(self):
+        self.vectorizer = TfidfVectorizer(
+            analyzer='char',  # 文字レベルで分析（日本語対応）
+            ngram_range=(1, 3)  # 1-3文字の組み合わせを使用
+        )
+        self.scene_questions = {}
+        self.scene_vectors = {}
+    
+    def register_scene(self, scene_id, questions_dict):
+        """場面の質問を登録してベクトル化"""
+        if not questions_dict:
+            return
+        
+        questions_list = list(questions_dict.keys())
+        self.scene_questions[scene_id] = {
+            'questions': questions_list,
+            'answers': questions_dict
+        }
+        
+        # 質問をベクトル化
+        self.scene_vectors[scene_id] = self.vectorizer.fit_transform(questions_list)
+    
+    def find_best_match(self, user_input, scene_id, threshold=0.3):
+        """ユーザー入力に最も近い質問を見つける
+        
+        Args:
+            user_input: ユーザーの入力文字列
+            scene_id: 場面ID
+            threshold: 類似度の閾値（これ以下は「わからない」を返す）
+        
+        Returns:
+            dict: {'question': 最も近い質問, 'answer': 回答, 'similarity': 類似度}
+        """
+        if scene_id not in self.scene_questions:
+            return None
+        
+        # ユーザー入力をベクトル化
+        user_vector = self.vectorizer.transform([user_input])
+        
+        # 各質問との類似度を計算
+        similarities = cosine_similarity(user_vector, self.scene_vectors[scene_id])[0]
+        
+        # 最も類似度が高いものを選択
+        best_idx = np.argmax(similarities)
+        best_similarity = similarities[best_idx]
+        
+        if best_similarity < threshold:
+            return {
+                'question': None,
+                'answer': "申し訳ありません。\nその質問には対応できません。別の言い方で質問してみてください。",
+                'similarity': best_similarity
+            }
+        
+        best_question = self.scene_questions[scene_id]['questions'][best_idx]
+        answer = self.scene_questions[scene_id]['answers'][best_question]
+        
+        return {
+            'question': best_question,
+            'answer': answer,
+            'similarity': best_similarity
+        }
+
+# ========================
 # アプリケーション状態管理
 # ========================
 class AppState:
@@ -101,6 +171,7 @@ class AppState:
 
 
 app_state = AppState()
+question_matcher = QuestionMatcher()
 
 # ========================
 # ユーティリティ関数
@@ -113,18 +184,17 @@ def normalize_input(user_input):
 
 
 def get_response(normalized_input, scene_id):
-    """入力に対する応答を取得（完全一致判定）"""
+    """入力に対する応答を取得（類似度マッチング）"""
     if scene_id not in SCENES_DATA:
         return None
     
-    scene_questions = SCENES_DATA[scene_id]["questions"]
+    # 類似度マッチングで最適な回答を検索
+    result = question_matcher.find_best_match(normalized_input, scene_id)
     
-    # キーの完全一致を確認
-    if normalized_input in scene_questions:
-        return scene_questions[normalized_input]
+    if result:
+        return result['answer']
     
-    # 一致しない場合は定型文を返す
-    return "申し訳ありません。\nこの質問には現在対応していません。"
+    return "申し訳ありません。\nその質問には対応できません。"
 
 
 # ========================
@@ -154,6 +224,9 @@ def change_scene():
     app_state.set_scene(scene_id)
     scene_data = SCENES_DATA[scene_id]
     
+    # 質問マッチャーに場面の質問を登録
+    question_matcher.register_scene(scene_id, scene_data["questions"])
+    
     return jsonify({
         "success": True,
         "scene_id": scene_id,
@@ -181,10 +254,11 @@ def ask_question():
     if scene_id not in SCENES_DATA:
         return jsonify({"success": False, "error": "不正な場面IDです"}), 400
     
-    scene_data = SCENES_DATA[scene_id]
+    # 質問を正規化
+    normalized_question = normalize_input(question)
     
-    # 質問に対する回答を検索
-    answer = scene_data["questions"].get(question)
+    # 類似度マッチングで回答を取得
+    answer = get_response(normalized_question, scene_id)
     
     if answer is None:
         return jsonify({"success": False, "error": "この質問に対する回答が見つかりません"}), 400

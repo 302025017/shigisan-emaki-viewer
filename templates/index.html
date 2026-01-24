@@ -371,7 +371,7 @@
     <div class="container">
         <header>
             <h1>信貴山縁起絵巻 鑑賞支援システム</h1>
-            <p>質問を入力して、各場面について学びましょう</p>
+            <p>自由に質問を入力して、各場面について学びましょう</p>
         </header>
 
         <div class="main-content">
@@ -416,12 +416,12 @@
                     </div>
 
                     <div class="chat-input-area">
-                        <select 
+                        <input 
+                            type="text"
                             id="user-input" 
+                            placeholder="質問を入力してください"
                             disabled
-                        >
-                            <option value="">-- 質問を選択してください --</option>
-                        </select>
+                        />
                         <button id="send-button" disabled>送信</button>
                     </div>
                 </div>
@@ -451,6 +451,13 @@
         // ========================
         sceneSelect.addEventListener("change", handleSceneChange);
         sendButton.addEventListener("click", handleSendMessage);
+        
+        // Enterキーで送信
+        userInput.addEventListener("keypress", function(event) {
+            if (event.key === "Enter" && !userInput.disabled) {
+                handleSendMessage();
+            }
+        });
 
         // ========================
         // イベントハンドラー
@@ -463,7 +470,8 @@
                 currentSceneId = null;
                 userInput.disabled = true;
                 sendButton.disabled = true;
-                userInput.innerHTML = '<option value="">-- 質問を選択してください --</option>';
+                userInput.value = "";
+                userInput.placeholder = "質問を入力してください";
                 sceneInfo.style.display = "none";
                 chatMessages.innerHTML = `
                     <div class="placeholder-message">
@@ -495,30 +503,17 @@
                     referenceUrl.href = data.reference_url;
                     sceneInfo.style.display = "block";
 
-                    // 質問リストをプルダウンに設定
-                    userInput.innerHTML = '<option value="">-- 質問を選択してください --</option>';
-                    
-                    if (data.questions && Object.keys(data.questions).length > 0) {
-                        Object.keys(data.questions).forEach((question) => {
-                            const option = document.createElement("option");
-                            option.value = question;
-                            option.textContent = question;
-                            userInput.appendChild(option);
-                        });
-                        
-                        // チャット入力を有効化
-                        userInput.disabled = false;
-                        sendButton.disabled = false;
-                    } else {
-                        showError("この場面には質問がありません");
-                        userInput.disabled = true;
-                        sendButton.disabled = true;
-                    }
+                    // チャット入力を有効化
+                    userInput.disabled = false;
+                    sendButton.disabled = false;
+                    userInput.value = "";
+                    userInput.placeholder = `${data.title}について質問してください`;
+                    userInput.focus();
 
                     // チャットをクリア
                     chatMessages.innerHTML = `
                         <div class="placeholder-message">
-                            ${data.title}について質問を選択してください
+                            ${data.title}について自由に質問してください
                         </div>
                     `;
                 }
@@ -529,9 +524,10 @@
         }
 
         async function handleSendMessage() {
-            const selectedQuestion = userInput.value.trim();
+            const question = userInput.value.trim();
 
-            if (!selectedQuestion) {
+            if (!question) {
+                showError("質問を入力してください");
                 return;
             }
 
@@ -546,11 +542,11 @@
                 messageDiv.className = "message user";
                 const contentDiv = document.createElement("div");
                 contentDiv.className = "message-content";
-                contentDiv.textContent = selectedQuestion;
+                contentDiv.textContent = question;
                 messageDiv.appendChild(contentDiv);
                 chatMessages.appendChild(messageDiv);
 
-                // 選択をリセット
+                // 入力をクリア
                 userInput.value = "";
                 sendButton.disabled = true;
                 userInput.disabled = true;
@@ -565,7 +561,7 @@
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({ 
-                        question: selectedQuestion,
+                        question: question,
                         scene_id: currentSceneId 
                     }),
                 });
