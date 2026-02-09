@@ -13,6 +13,7 @@
 6. [フロントエンド（HTML/CSS/JavaScript）の仕組み](#6-フロントエンドhtmlcssjavascriptの仕組み)
 7. [動作フロー（ユーザーの行動とシステムの反応）](#7-動作フロー)
 8. [主要な機能の実装詳細](#8-主要な機能の実装詳細)
+8.1 [テキスト入力式の技術まとめ（補足）](#text-input-tech-summary)
 
 ---
 
@@ -113,6 +114,7 @@ Mirubun/                          ← プロジェクトフォルダ
 ├── Chat_bot.py                   ← ⭐ メインプログラム（Flaskサーバー）
 ├── requirements.txt              ← 必要なPythonパッケージ一覧
 ├── README.md                     ← 使い方ドキュメント
+├── TEXT_INPUT_TECH_GUIDE.md      ← テキスト入力式の技術解説
 │
 └── templates/                    ← Webページ用フォルダ
     └── index.html                ← ⭐ Webページ（HTML/CSS/JavaScript）
@@ -163,6 +165,10 @@ Werkzeug==3.0.1
 #### 📖 README.md
 
 **役割：** 使い方マニュアル
+
+#### 📝 TEXT_INPUT_TECH_GUIDE.md
+
+**役割：** テキスト入力式への変更点と使用技術をまとめた解説資料
 
 ---
 
@@ -1027,6 +1033,20 @@ async function handleSendMessage() {
 ✓ UIがシンプル（入力欄のみ）
 ✓ 閾値で安全に回答範囲を制御
 ```
+
+<a id="text-input-tech-summary"></a>
+### 8.1 テキスト入力式の技術まとめ（補足）
+
+**目的：** プルダウン選択式からテキスト入力式へ変更し、自由入力を実現する
+
+**使用技術の要点：**
+
+- **HTML**: `input` で自由入力欄を作成、場面未選択時は無効化
+- **JavaScript**: クリック/Enterで送信、二重送信防止、Fetch APIでJSON送信
+- **Flask**: `/api/ask` で質問を受け取り、正規化とエラーチェックを実施
+- **類似度マッチング**: TF-IDF（文字n-gram）+ コサイン類似度で最適回答を選択
+
+**補足資料：** より詳しい説明は `TEXT_INPUT_TECH_GUIDE.md` にまとめています
 
 ### ✨ 機能3：状態管理（場面切り替え時に履歴をリセット）
 
